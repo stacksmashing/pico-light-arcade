@@ -7,6 +7,14 @@ https://twitter.com/ghidraninja/status/1422900329369178113
 
 The LEDs and buttons are connected in a 3x7 matrix. Pictures will follow shortly :)
 
+### Required materials
+
+- A board (duh!)
+- 20 arcade buttons (note that most of them are really dark at 3.3V, you might want to change the resistor!)
+- Blade receptables
+- Wire
+- A Raspberry Pi Pico
+
 ### LEDS
 
 The anode is the Y axis, and gets connected to IO 0, 1 and 2.
