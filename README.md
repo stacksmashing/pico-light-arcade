@@ -35,3 +35,13 @@ cd build
 cmake ..
 make
 ```
+
+## Running the webinterface
+
+Note that you'll need a self-signed cert + key for running locally, as browsers only allow Web Serial via HTTPS.
+
+```
+cd web
+npm install
+HTTPS=true SSL_CRT_FILE=cert.pem SSL_KEY_FILE=keynp.pem npm start
+```
