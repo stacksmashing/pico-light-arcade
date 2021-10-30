@@ -9,10 +9,15 @@
 #include "led.h"
 #include "button.h"
 
+const uint32_t BUTTONS_START = 0;
+const uint32_t BUTTONS_MODE = 1;
+const uint32_t BUTTONS_PLAYER_1 = 2;
+const uint32_t BUTTONS_PLAYER_2 = 11;
 
 enum game_state {
     GAME_IDLE,
     GAME_ACTIVE,
+    GAME_SIMON_ACTIVE,
     GAME_OVER
 };
 
@@ -31,12 +36,13 @@ void leds_all(bool state) {
 }
 
 uint64_t seconds_since_boot() {
-    return time_us_64() / 1000000;
+    return time_us_64() / 500000;
 }
 
 void game_idle(game *game) {
     // Button state
     button_events events;
+    unsigned mode = 0;
 
     // Flash all LEDs
     uint64_t last_seconds = seconds_since_boot();
@@ -46,8 +52,27 @@ void game_idle(game *game) {
         if(seconds > last_seconds) {
             printf("IDLE BLABLABLA\n");
             if(seconds % 2) {
+                if(mode == 0) {
+                    led_set_state(2, 1);
+                    led_set_state(3, 1);
+                    led_set_state(4, 1);
+                    led_set_state(5, 1);
+                    led_set_state(6, 1);
+                    led_set_state(BUTTONS_PLAYER_2+0, 1);
+                    led_set_state(BUTTONS_PLAYER_2+1, 1);
+                    led_set_state(BUTTONS_PLAYER_2+2, 1);
+                    led_set_state(BUTTONS_PLAYER_2+3, 1);
+                    led_set_state(BUTTONS_PLAYER_2+4, 1);
+                } else if(mode == 1) {
+                    led_set_state(7, 1);
+                    led_set_state(8, 1);
+                    led_set_state(9, 1);
+                    led_set_state(BUTTONS_PLAYER_2+5, 1);
+                    led_set_state(BUTTONS_PLAYER_2+6, 1);
+                    led_set_state(BUTTONS_PLAYER_2+7, 1);
+                }
                 // led_set_state(0, 1);
-                leds_all(1);
+                // leds_all(1);
             } else {
                 // led_set_state(0, 0);
                 leds_all(0);
@@ -59,18 +84,28 @@ void game_idle(game *game) {
         for(int i=0; i < events.event_count; i++) {
             button_event *ev = &events.events[i];
             if(ev->type == BUTTON_RELEASED) {
-                printf("GAME_START 60\n");
-                game->state = GAME_ACTIVE;
-                return;
+                if(ev->button_number == BUTTONS_MODE) {
+                    // change mode
+                    mode += 1;
+                    if(mode > 1) {
+                        mode = 0;
+                    }
+                } else if (ev->button_number == BUTTONS_START) {
+                    if(mode == 0) {
+
+                        printf("GAME_START 60\n");
+                        game->state = GAME_ACTIVE;
+                        return;
+                    } else if(mode == 1) {
+                        game->state = GAME_SIMON_ACTIVE;
+                        return;
+                    }
+                }
             }
         }
     }
 }
 
-const uint32_t BUTTONS_START = 0;
-const uint32_t BUTTONS_MODE = 1;
-const uint32_t BUTTONS_PLAYER_1 = 2;
-const uint32_t BUTTONS_PLAYER_2 = 11;
 
 typedef struct {
     uint32_t button_base;
@@ -178,7 +213,167 @@ void player_handle_button(player_state *state, button_event *ev) {
     }
 }
 
+
+typedef struct {
+    uint32_t button_base;
+    uint32_t correct;
+    bool done;
+    bool mistake;
+} simon_player;
+
+void simon_player_init(simon_player *p, unsigned button_base) {
+    p->button_base = button_base;
+    p->correct = 0;
+    p->done = false;
+    p->mistake = false;
+}
+
+void simon_next_round(simon_player *p) {
+    p->correct = 0;
+    p->done = false;
+    p->mistake = false;
+}
+
+bool simon_button_is_player(simon_player *p, unsigned button) {
+    if((p->button_base <= button) && (button < p->button_base + 9)) {
+        return true;
+    }
+    return false;
+}
+
+bool simon_check_button(simon_player *p, unsigned *leds, unsigned level, unsigned button) {
+    if(p->correct == (level + 1)) {
+        return true;
+    }
+
+    if(p->mistake) {
+        return false;
+    }
+
+    if(leds[p->correct] == button - p->button_base) {
+        p->correct++;
+        if(p->correct == level+1) {
+            p->done = true;
+        }
+        return true;
+    } else {
+        p->mistake = true;
+    }
+
+    return false;
+}
+
+void simon_player_blink(simon_player *p) {
+    leds_all(false);
+    for(int i=0; i < 6; i++) {
+        for(int j=0; j < 9; j++) {
+            led_set_state(p->button_base + j, 1);
+        }
+        sleep_ms(100);
+        for(int j=0; j < 9; j++) {
+            led_set_state(p->button_base + j, 0);
+        }
+        sleep_ms(100);
+    }
+}
+
+void game_active_simon(game *game) {
+    srand(time_us_32());
+    unsigned level = 0;
+    unsigned leds[30]= {0}; // max 30 levels
+
+    simon_player p1, p2;
+    simon_player_init(&p1, BUTTONS_PLAYER_1);
+    simon_player_init(&p2, BUTTONS_PLAYER_2);
+    leds_all(0);
+    sleep_ms(500);
+    while(1) {
+        // generate new led
+        leds[level] = rand() % 9; 
+
+        // display for both players
+        leds_all(0);
+        for(int i = 0; i < level+1; i++) {
+            unsigned led = leds[i];
+            led_set_state(BUTTONS_PLAYER_1 + led, 1);
+            led_set_state(BUTTONS_PLAYER_2 + led, 1);
+            sleep_ms(250);
+            led_set_state(BUTTONS_PLAYER_1 + led, 0);
+            led_set_state(BUTTONS_PLAYER_2 + led, 0);
+            sleep_ms(100);
+        }
+
+        // wait for players to enter :)
+        bool round_finished = false;
+        while(!round_finished) {
+            button_events events;
+            button_poll(&events);
+            for(int i=0; i < events.event_count; i++) {
+                button_event *ev = &events.events[i];
+                if(ev->type == BUTTON_RELEASED) {
+                    led_set_state(ev->button_number, 0);
+                }
+                if(ev->type == BUTTON_PRESSED) {
+                    led_set_state(ev->button_number, 1);
+                    if(simon_button_is_player(&p1, ev->button_number)) {
+                        printf("Player 1 pressed %d\n", ev->button_number);
+                        if(simon_check_button(&p1, leds, level, ev->button_number)) {
+                            printf("Correct!\n");
+                        } else {
+                            printf("Wrong!\n");
+                        }
+                    }
+                    if(simon_button_is_player(&p2, ev->button_number)) {
+                        printf("Player 2 pressed %d\n", ev->button_number);
+                        if(simon_check_button(&p2, leds, level, ev->button_number)) {
+                            printf("Correct!\n");
+                        } else {
+                            printf("Wrong!\n");
+                        }
+                    }
+
+                    if(p1.mistake) {
+                        printf("Player 1 fucked up");
+                        simon_player_blink(&p2);
+                        game->state = GAME_IDLE;
+                        return;
+                    }
+                    if(p2.mistake) {
+                        printf("Player 2 fucked up");
+                        simon_player_blink(&p1);
+                        game->state = GAME_IDLE;
+                        return;
+                    }
+                    if(p1.done) {
+                        printf("Player 1 ok");
+                    }
+                    if(p2.done) {
+                        printf("Player 2 ok");
+                    }
+
+                    if(p1.done && p2.done) {
+                        printf("Both players done!");
+                        leds_all(1);
+                        sleep_ms(200);
+                        leds_all(0);
+                        sleep_ms(200);
+                        simon_next_round(&p1);
+                        simon_next_round(&p2);
+                        level++;
+                        round_finished = true;
+                        break;
+                    }
+                    
+                }
+            }
+        }
+        
+
+    }
+}
+
 void game_active(game *game) {
+    srand(time_us_32());
     for(int i=0; i < 21; i++) {
         led_set_state(i, 0);
     }
@@ -199,7 +394,7 @@ void game_active(game *game) {
     game->start_time = time_us_64();
 
     uint64_t last_seconds = 0;
-    uint64_t game_time = 60*1000000;
+    uint64_t game_time = 30*1000000;
 
     uint64_t previous_time = game->start_time;
     while(1) {
@@ -297,6 +492,9 @@ int main() {
                 break;
             case GAME_ACTIVE:
                 game_active(&game);
+                break;
+            case GAME_SIMON_ACTIVE:
+                game_active_simon(&game);
                 break;
             case GAME_OVER:
                 game_over(&game);

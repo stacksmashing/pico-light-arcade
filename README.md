@@ -25,6 +25,11 @@ The cathode is the X axis of the matrix and gets connected to IOs 3-9.
 
 The buttons' matrix Y axis is connected to IO 10-12, the X axis to IO 13-19.
 
+### LED/Button schematic
+
+This is how the LEDs & Buttons neeed to be connected (With Buttons starting from IO10 instead of IO0):
+
+![](assets/schematic.png)
 
 ## Building the firmware
 
